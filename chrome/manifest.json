@@ -1,0 +1,11 @@
+{
+  "name": "SMP_Prototype",
+  "version": "1.0",
+  "description": "Secure Message Passing Prototype",
+  "content_scripts": [{
+    "matches": ["file://*/*"],
+    "js": ["content_bridge.js"]
+  }],
+  "background_page": "background_bridge.html",
+  "permissions": ["http://*/"]
+}

@@ -1,0 +1,18 @@
+<html>
+<script>
+// Add a listener to handle the passed message from our content script.
+chrome.extension.onRequest.addListener(
+  function(request, sender, sendResponse) {
+    // When we get a message from the content script we make an XHR call to the
+    // requested URL.
+    r = new XMLHttpRequest();
+
+    // We are making this call synchronously for simplicity.
+    r.open("GET", request.loc, false);
+    r.send(null);
+
+    // When we get a response, we send it back to the content script.
+    sendResponse({txt: r.responseText});
+  });
+</script>
+</html>

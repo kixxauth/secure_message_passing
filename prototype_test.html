@@ -1,0 +1,243 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+  <style>
+    * {padding: 0; margin: 0;}
+    h1, h2, h3, h4, p {margin-bottom: 1em}
+    body {
+      margin: 3em;
+      background: #252525;
+      color: #fff;
+      font-family: sans-serif;
+    }
+    .example {
+      margin-top: 3em;
+      padding: 1em 3em 3em 3em;
+      background: #000;
+    }
+    .example p {
+      max-width: 40em;
+    }
+    .output {
+      margin-top: 1em;
+      border: 1px dashed red;
+      padding: 1em;
+      min-height: 7em;
+    }
+  </style>
+  <!--
+<script src="" type="text/javascript"></script>
+-->
+<script type="text/javascript">
+  function prOut(st, box) {
+    var p = document.createElement("p");
+    p.innerHTML = st;
+    document.getElementById(box).appendChild(p);
+  }
+</script>
+<title>Secure Message Passing Tests</title>
+</head>
+<body>
+  <h1>Secure Message Passing Tests</h1>
+  <p>
+  We'll use a cross domain XMLHttpRequest call as an example of extending
+  browser privileges with message passing.
+  </p>
+  <div class="example">
+    <h3>test #1</h3>
+    <p>
+    This first example will use a normal HTTP "GET" XHR request to "./data.txt".
+    It will be loading the file "data.txt" through the "file://" URL scheme.
+    The code looks like this:
+    </p>
+    <code>
+      <pre>
+      function do_test1() {
+        r = new XMLHttpRequest();
+        r.open("GET", "./data.txt", false);
+        r.send(null);
+        prOut(r.responseText, "test1");
+      }
+      </pre>
+    </code>
+    <script type="text/javascript">
+      function do_test1() {
+        r = new XMLHttpRequest();
+        r.open("GET", "./data.txt", false);
+        r.send(null);
+        prOut(r.responseText, "test1");
+      }
+    </script>
+    <p><button onclick="do_test1();">Try It</button></p>
+    <div id="test1" class="output">
+    <h4>test #1 output</h4>
+    </div>
+  </div>
+  <div class="example">
+    <h3>test #2</h3>
+    <p>
+    Next, we'll try to load something from the GitHub API using XMLHttpRequest.
+    You'll see that in this case we are expecting an error from Chrome, since
+    we are trying to make a cross domain XHR request. So, we'll give it a go
+    and see what the error says.
+    The code looks like this:
+    </p>
+    <code>
+      <pre>
+      function do_test2() {
+        r = new XMLHttpRequest();
+        r.open("GET", "http://github.com/api/v2/yaml/issues/show/kixxauth/kixx/1", false);
+        try {
+          r.send(null);
+        } catch(e) {
+          prOut(e.message, "test2");
+        }
+      }
+      </pre>
+    </code>
+    <script type="text/javascript">
+      function do_test2() {
+        r = new XMLHttpRequest();
+        r.open("GET", "http://github.com/api/v2/yaml/issues/show/kixxauth/kixx/1", false);
+        try {
+          r.send(null);
+        } catch(e) {
+          prOut(e.message, "test2");
+        }
+      }
+    </script>
+    <p><button onclick="do_test2();">Try It</button></p>
+    <div id="test2" class="output">
+    <h4>test #2 output</h4>
+    </div>
+  </div>
+  <div class="example">
+    <h3>test #3</h3>
+    <p>
+    This time we use our event driven message passing system to make the
+    XMLHttpRequest from a background page within the extention.  This page
+    contains a special HTML element I called "messenger".  When you click the
+    "Try It" button, it attaches the GitHub URL to that element, and then
+    creates and fires a custom event.
+    </p>
+    <p>
+    If you are on the Chrome browser, you'll find a content script within the
+    extension called "content_bridge.js".  The Chrome extension system loads
+    that script every time we load a page with a "file://" URL as declared in
+    our manifest.json for the extension.  Since this page is from a "file://"
+    URL, "content_bridge.js" was loaded when we loaded the page. The content
+    script handles our custom event, and passes the message to the privileged
+    background page ("background_bridge.html") to make the XMLHttpRequest to
+    GitHub.
+    </p>
+    <p>
+    The background page then sends the response back to the content script, and
+    the content script fires another event on our custom HTML element.  From
+    there, this page is able to load the response from the GitHub API.
+    </p>
+    <h4>The code from this page:</h4>
+    <code>
+      <pre>
+    &lt;!-- Custom HTML element for message passing. --&gt;
+    &lt;messenger id="messenger" message="null" style="display:none"&gt;&lt;/messenger&gt;
+
+      function do_test3() {
+        var messenger = document.getElementById("messenger"),
+            messageEvent = document.createEvent('Event'); // Create our custom event
+
+        // Attach the desired URL to our custom HTML element. This URL could
+        // point to anything in the World.
+        messenger.setAttribute("message",
+            "http://github.com/api/v2/yaml/issues/show/kixxauth/kixx/1");
+
+        // Add an event listener to our custom HTML element for the response.
+        messenger.addEventListener("messageResponse", function (evt) {
+              prOut(evt.target.innerText, "test3");
+            });
+
+        // Initialize and dispatch the event so the content script can handle it.
+        messageEvent.initEvent('messagePassing', true, true);
+        messenger.dispatchEvent(messageEvent);
+      }
+      </pre>
+    </code>
+    <h4>The code from content script (content_bridge.js):</h4>
+    <code>
+      <pre>
+      // Add an event listener to our custom HTML element so we know when the test
+      // page has requested a URL.
+      document.getElementById("messenger").addEventListener("messagePassing", function(evt) {
+
+            // Get the URL from the custom HTML element.
+            var message = evt.target.getAttribute("message");
+
+            // Send the URL to the background page using Chrome extension message
+            // passing system.
+            chrome.extension.sendRequest({loc: message}, function(response) {
+
+              // When the background page responds, we create a new custom event to
+              // notify our test page that the response has arrived.
+              var messenger = document.getElementById("messenger"),
+                  messageEvent = document.createEvent('Event');
+
+              // We attach the response text from the background page to our custom
+              // HTML element.
+              messenger.innerText = response.txt;
+
+              // We initialize and dispatch our custom event to notify our test page
+              // that the response has arrived.
+              messageEvent.initEvent('messageResponse', true, true);
+              messenger.dispatchEvent(messageEvent);
+            });
+          });
+      </pre>
+    </code>
+    <h4>The code from background page (background_bridge.js):</h4>
+    <code>
+      <pre>
+      // Add a listener to handle the passed message from our content script.
+      chrome.extension.onRequest.addListener(
+        function(request, sender, sendResponse) {
+          // When we get a message from the content script we make an XHR call to the
+          // requested URL.
+          r = new XMLHttpRequest();
+
+          // We are making this call synchronously for simplicity.
+          r.open("GET", request.loc, false);
+          r.send(null);
+
+          // When we get a response, we send it back to the content script.
+          sendResponse({txt: r.responseText});
+        });
+      </pre>
+    </code>
+    <!-- Custom HTML element for message passing. -->
+    <messenger id="messenger" message="null" style="display:none"></messenger>
+    <script type="text/javascript">
+      function do_test3() {
+        var messenger = document.getElementById("messenger"),
+            messageEvent = document.createEvent('Event'); // Create our custom event
+
+        // Attach the desired URL to our custom HTML element. This URL could
+        // point to anything in the World.
+        messenger.setAttribute("message",
+            "http://github.com/api/v2/yaml/issues/show/kixxauth/kixx/1");
+
+        // Add an event listener to our custom HTML element for the response.
+        messenger.addEventListener("messageResponse", function (evt) {
+              prOut('<pre>'+ evt.target.innerText +'</pre>', "test3");
+            });
+
+        // Initialize and dispatch the event so the content script can handle it.
+        messageEvent.initEvent('messagePassing', true, true);
+        messenger.dispatchEvent(messageEvent);
+      }
+    </script>
+    <p><button onclick="do_test3();">Try It</button></p>
+    <div id="test3" class="output">
+      <h4>test #3 output</h4>
+    </div>
+  </div>
+</body>
+</html>
