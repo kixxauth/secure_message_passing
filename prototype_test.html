@@ -136,7 +136,7 @@
     the content script fires another event on our custom HTML element.  From
     there, this page is able to load the response from the GitHub API.
     </p>
-    <h4>The code from this page:</h4>
+    <h4>The code from this page: (Both Chrome and Firefox)</h4>
     <code>
       <pre>
     &lt;!-- Custom HTML element for message passing. --&gt;
@@ -153,7 +153,7 @@
 
         // Add an event listener to our custom HTML element for the response.
         messenger.addEventListener("messageResponse", function (evt) {
-              prOut(evt.target.innerText, "test3");
+              prOut(evt.target.textContent, "test3");
             });
 
         // Initialize and dispatch the event so the content script can handle it.
@@ -162,7 +162,7 @@
       }
       </pre>
     </code>
-    <h4>The code from content script (content_bridge.js):</h4>
+    <h4>The code from the content script for Chrome. (content_bridge.js):</h4>
     <code>
       <pre>
       // Add an event listener to our custom HTML element so we know when the test
@@ -183,7 +183,7 @@
 
               // We attach the response text from the background page to our custom
               // HTML element.
-              messenger.innerText = response.txt;
+              messenger.contentText = response.txt;
 
               // We initialize and dispatch our custom event to notify our test page
               // that the response has arrived.
@@ -193,7 +193,7 @@
           });
       </pre>
     </code>
-    <h4>The code from background page (background_bridge.js):</h4>
+    <h4>The code from the background page for Chrome. (background_bridge.js):</h4>
     <code>
       <pre>
       // Add a listener to handle the passed message from our content script.
@@ -212,6 +212,49 @@
         });
       </pre>
     </code>
+    <h4>The code from the overlay document for Firefox. (overlay.xul):</h4>
+    <code>
+      <pre>
+      window.addEventListener("load", function(loadEvent) {
+
+        // Add an event listener to this chrome privileged document. Events from
+        // content pages will bubble up to this listener.
+        document.addEventListener("messagePassing", function(evt) {
+
+              // Get the URL from the custom HTML element.
+              var message = evt.target.getAttribute("message");
+
+              // When we get a message from the content script we make an XHR call to the
+              // requested URL.
+              r = new XMLHttpRequest();
+
+              // We are making this call synchronously for simplicity.
+              r.open("GET", message, true);
+              r.onreadystatechange = function (xhrEvent) {
+                if (r.readyState == 4) {
+                  // When the background page responds, we create a new custom event
+                  // to notify our test page that the response has arrived.
+                  var messageEvent = document.createEvent('Event');
+
+                  // We attach the response text from the background page to our
+                  // custom HTML element. Text content is more secure than innerHTML
+                  // for this purpose.
+                  evt.target.textContent = r.responseText;
+
+                  // We initialize and dispatch our custom event to notify our test
+                  // page that the response has arrived.
+                  messageEvent.initEvent('messageResponse', true, true);
+                  evt.target.dispatchEvent(messageEvent);
+                }
+              };
+              r.send(null);
+
+            }, false, true);
+            // addEventListener() requests an extra boolean
+            // parameter to listen for events from a content frame.
+        }, false);
+      </pre>
+    </code>
     <!-- Custom HTML element for message passing. -->
     <messenger id="messenger" message="null" style="display:none"></messenger>
     <script type="text/javascript">
@@ -226,10 +269,10 @@
 
         // Add an event listener to our custom HTML element for the response.
         messenger.addEventListener("messageResponse", function (evt) {
-              prOut('<pre>'+ evt.target.innerText +'</pre>', "test3");
-            });
+              prOut('<pre>'+ evt.target.textContent +'</pre>', "test3");
+            }, true);
 
-        // Initialize and dispatch the event so the content script can handle it.
+        // Initialize and dispatch the event.
         messageEvent.initEvent('messagePassing', true, true);
         messenger.dispatchEvent(messageEvent);
       }

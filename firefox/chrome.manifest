@@ -1,0 +1,2 @@
+content smp ./
+overlay chrome://browser/content/browser.xul chrome://smp/content/overlay.xul

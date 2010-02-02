@@ -1,0 +1,48 @@
+<?xml version="1.0"?>
+
+<?xml-stylesheet href="chrome://kixx/content/packs/platform/firefox/toolbar-button.css" type="text/css"?>
+
+<overlay xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul">
+
+<script type="application/javascript;version=1.8">
+window.addEventListener("load", function(loadEvent) {
+
+  // Add an event listener to this chrome privileged document. Events from
+  // content pages will bubble up to this listener.
+  document.addEventListener("messagePassing", function(evt) {
+
+        // Get the URL from the custom HTML element.
+        var message = evt.target.getAttribute("message");
+
+        // When we get a message from the content script we make an XHR call to the
+        // requested URL.
+        r = new XMLHttpRequest();
+
+        // We are making this call synchronously for simplicity.
+        r.open("GET", message, true);
+        r.onreadystatechange = function (xhrEvent) {
+          if (r.readyState == 4) {
+            // When the background page responds, we create a new custom event
+            // to notify our test page that the response has arrived.
+            var messageEvent = document.createEvent('Event');
+
+            // We attach the response text from the background page to our
+            // custom HTML element. Text content is more secure than innerHTML
+            // for this purpose.
+            evt.target.textContent = r.responseText;
+
+            // We initialize and dispatch our custom event to notify our test
+            // page that the response has arrived.
+            messageEvent.initEvent('messageResponse', true, true);
+            evt.target.dispatchEvent(messageEvent);
+          }
+        };
+        r.send(null);
+
+      }, false, true);
+      // addEventListener() requests an extra boolean
+      // parameter to listen for events from a content frame.
+  }, false);
+</script>
+
+</overlay>
